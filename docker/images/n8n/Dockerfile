@@ -7,12 +7,14 @@ FROM --platform=linux/amd64 n8nio/base:${NODE_VERSION} AS builder
 # Build the application from source
 WORKDIR /src
 COPY . /src
-RUN corepack prepare pnpm@10.11.1 --activate
+
+# Prepare pnpm and enable corepack (fix for pnpm install issue)
+RUN corepack prepare pnpm@10.11.1 --activate && corepack enable
 
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm/metadata \
-    DOCKER_BUILD=true PNPM_CONFIG_ENGINE_STRICT=false pnpm install
-
+    DOCKER_BUILD=true PNPM_CONFIG_ENGINE_STRICT=false pnpm install --frozen-lockfile --network-concurrency=1 || \
+    (echo "Retrying pnpm install..." && pnpm install --frozen-lockfile --network-concurrency=1)
 
 RUN pnpm build
 
@@ -48,28 +50,29 @@ COPY docker/images/n8n/docker-entrypoint.sh /
 ARG TARGETPLATFORM
 ARG LAUNCHER_VERSION=1.1.2
 COPY docker/images/n8n/n8n-task-runners.json /etc/n8n-task-runners.json
+
 # Download, verify, then extract the launcher binary
 RUN \
-	if [[ "$TARGETPLATFORM" = "linux/amd64" ]]; then export ARCH_NAME="amd64"; \
-	elif [[ "$TARGETPLATFORM" = "linux/arm64" ]]; then export ARCH_NAME="arm64"; fi; \
-	mkdir /launcher-temp && \
-	cd /launcher-temp && \
-	wget https://github.com/n8n-io/task-runner-launcher/releases/download/${LAUNCHER_VERSION}/task-runner-launcher-${LAUNCHER_VERSION}-linux-${ARCH_NAME}.tar.gz && \
-	wget https://github.com/n8n-io/task-runner-launcher/releases/download/${LAUNCHER_VERSION}/task-runner-launcher-${LAUNCHER_VERSION}-linux-${ARCH_NAME}.tar.gz.sha256 && \
-	# The .sha256 does not contain the filename --> Form the correct checksum file
-	echo "$(cat task-runner-launcher-${LAUNCHER_VERSION}-linux-${ARCH_NAME}.tar.gz.sha256) task-runner-launcher-${LAUNCHER_VERSION}-linux-${ARCH_NAME}.tar.gz" > checksum.sha256 && \
-	sha256sum -c checksum.sha256 && \
-	tar xvf task-runner-launcher-${LAUNCHER_VERSION}-linux-${ARCH_NAME}.tar.gz --directory=/usr/local/bin && \
-	cd - && \
-	rm -r /launcher-temp
+    if [[ "$TARGETPLATFORM" = "linux/amd64" ]]; then export ARCH_NAME="amd64"; \
+    elif [[ "$TARGETPLATFORM" = "linux/arm64" ]]; then export ARCH_NAME="arm64"; fi; \
+    mkdir /launcher-temp && \
+    cd /launcher-temp && \
+    wget https://github.com/n8n-io/task-runner-launcher/releases/download/${LAUNCHER_VERSION}/task-runner-launcher-${LAUNCHER_VERSION}-linux-${ARCH_NAME}.tar.gz && \
+    wget https://github.com/n8n-io/task-runner-launcher/releases/download/${LAUNCHER_VERSION}/task-runner-launcher-${LAUNCHER_VERSION}-linux-${ARCH_NAME}.tar.gz.sha256 && \
+    # The .sha256 does not contain the filename --> Form the correct checksum file
+    echo "$(cat task-runner-launcher-${LAUNCHER_VERSION}-linux-${ARCH_NAME}.tar.gz.sha256) task-runner-launcher-${LAUNCHER_VERSION}-linux-${ARCH_NAME}.tar.gz" > checksum.sha256 && \
+    sha256sum -c checksum.sha256 && \
+    tar xvf task-runner-launcher-${LAUNCHER_VERSION}-linux-${ARCH_NAME}.tar.gz --directory=/usr/local/bin && \
+    cd - && \
+    rm -r /launcher-temp
 
 RUN \
-	cd /usr/local/lib/node_modules/n8n && \
-	npm rebuild sqlite3 && \
-	cd - && \
-	ln -s /usr/local/lib/node_modules/n8n/bin/n8n /usr/local/bin/n8n && \
-	mkdir .n8n && \
-	chown node:node .n8n
+    cd /usr/local/lib/node_modules/n8n && \
+    npm rebuild sqlite3 && \
+    cd - && \
+    ln -s /usr/local/lib/node_modules/n8n/bin/n8n /usr/local/bin/n8n && \
+    mkdir .n8n && \
+    chown node:node .n8n
 
 # Install npm 11.4.1 to fix the vulnerable cross-spawn dependency
 RUN npm install -g npm@11.4.1
