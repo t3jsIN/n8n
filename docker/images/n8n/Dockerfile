@@ -1,4 +1,4 @@
-ARG NODE_VERSION=22
+ARG NODE_VERSION=22.16
 ARG N8N_VERSION=snapshot
 
 # 1. Create an image to build n8n
