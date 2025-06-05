@@ -13,8 +13,9 @@ RUN corepack prepare pnpm@10.11.1 --activate && corepack enable
 
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm/metadata \
-    DOCKER_BUILD=true PNPM_CONFIG_ENGINE_STRICT=false pnpm install --frozen-lockfile --network-concurrency=1 || \
-    (echo "Retrying pnpm install..." && pnpm install --frozen-lockfile --network-concurrency=1)
+    DOCKER_BUILD=true PNPM_CONFIG_ENGINE_STRICT=false pnpm install --frozen-lockfile --no-optional --reporter=ndjson --network-concurrency=1 || \
+    (echo "Retrying pnpm install..." && pnpm install --frozen-lockfile --no-optional --reporter=ndjson --network-concurrency=1)
+
 
 RUN pnpm build
 
