@@ -7,9 +7,12 @@ FROM --platform=linux/amd64 n8nio/base:${NODE_VERSION} AS builder
 # Build the application from source
 WORKDIR /src
 COPY . /src
+RUN corepack prepare pnpm@10.11.1 --activate
+
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm/metadata \
-    DOCKER_BUILD=true PNPM_CONFIG_ENGINE_STRICT=false pnpm install --frozen-lockfile
+    DOCKER_BUILD=true PNPM_CONFIG_ENGINE_STRICT=false pnpm install
+
 
 RUN pnpm build
 
